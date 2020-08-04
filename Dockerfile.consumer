@@ -1,0 +1,24 @@
+#
+# Build container
+#
+FROM golang:1.14 as builder
+
+# copy the files into the GOPATH
+WORKDIR /app
+COPY . .
+
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o consumer ./cmd/consumer
+
+FROM alpine:3.7
+
+RUN apk update \
+  && apk add shadow \
+  && groupadd -r app \
+  && useradd -r -g app -s /sbin/nologin -c "Docker image user" app
+
+USER app
+WORKDIR /app
+
+COPY --from=builder /app/consumer .
+
+CMD ["/app/consumer"]

@@ -1,16 +1,16 @@
-package main
+package shared
 
 import (
 	"encoding/json"
 	"fmt"
 )
 
-type testJobData struct {
+type TestJobData struct {
 	Data string `json:"data"`
 }
 
-func worker(payload json.RawMessage) error {
-	var d testJobData
+func Worker(payload json.RawMessage) error {
+	var d TestJobData
 
 	if err := json.Unmarshal(payload, &d); err != nil {
 		return err

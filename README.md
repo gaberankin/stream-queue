@@ -1,3 +1,13 @@
-requires an instance of redis (at least redis 5) running locally.  i haven't had time to set up a dockerfile, but i can concentrate on doing it tomorrow morning.
+dockerfiles and docker-compose file permits local running without external dependencies.  to run, 
 
-build with `go build`, and run to see it work.  OR just examine the code.  comments with my thoughts are distributed throughout which are pertinant to my thoughts on it.  would appreciate feedback.
+```
+docker-compose up
+```
+
+there are 2 apps in this - a producer which pushes messages into the queue, and a consumer, which pulls items off the queue and processes them.
+
+To stop, `CTRL+c`, and then probably best to do
+
+```
+docker-compose down --remove-orphans
+```
