@@ -7,14 +7,19 @@ import (
 	"time"
 
 	goredis "github.com/go-redis/redis"
+	"github.com/google/uuid"
 )
 
+// RedisPubSub handler that can push/publish events into redis stream
+// and pull (subscribe to) events on redis stream.
 type RedisPubSub struct {
-	rc          *goredis.Client
-	workerGroup string
-	topic       string
+	rc           *goredis.Client
+	workerGroup  string
+	topic        string
+	consumerName string
 }
 
+// Publish push bytes into RedisPubSub's queue
 func (ps RedisPubSub) Publish(payload []byte) error {
 	if err := ps.rc.XAdd(&goredis.XAddArgs{
 		Stream: ps.topic,
@@ -27,52 +32,56 @@ func (ps RedisPubSub) Publish(payload []byte) error {
 	return nil
 }
 
-func (ps RedisPubSub) Subscribe(handler func([]byte)) error {
+// Subscribe drain queue by 1 and run provided handler on returned bytes.
+// if handler returns an error, the error is returned by Subscribe and the message is left in a pending state.
+func (ps RedisPubSub) Subscribe(handler func([]byte) error) error {
 	res, err := ps.rc.XReadGroup(&goredis.XReadGroupArgs{
-		Group: ps.workerGroup,
-		// this shouldn't be hardcoded.  if we had multiple consumers, we'd use something like the current machine's hostname or something.
-		// probably need to understand more about how Redis uses this
-		// and how deterministic/usable we need to make this.
-		Consumer: "consumer-1",
+		Group:    ps.workerGroup,
+		Consumer: ps.consumerName,
 		Streams:  []string{ps.topic, ">"},
-		Count:    1, // todo: should probably make this configurable at the implementation level
+		// todo: should probably make this configurable at the implementation level, but to do this we'll need
+		// to consider how errors should be handled in processing loop below.
+		Count: 1,
 	}).Result()
 	if err != nil {
 		return err
 	}
 
 	for _, streamData := range res {
-		// note that there are a few points of failure in this loop, and i am currently not doing anything here, as i'm unsure whether i should treat
-		// these errors as loop-breaking.
-		// the problem with what we're dealing with is that we're working with something that will persist as 'pending' unless they're ack'ed.
-		// in fact, EVERY OTHER MESSAGE pulled with this XReadGroup call (note we're allowing the `count` parameter) will _also_ be marked as pending
-		// if there's an error with the information, should the 1 message be left as pending?  if we return an error immediately, the rest of the batch
-		// is left hanging.
-		// alternative is to remove the `count` parameter, and only process 1 item at a time.  if there's an issue with it, we can more easily make a
-		// decision on what to do at that point.
+		// for the time being, only 1 item at max is processed at a time.  if the `Count` parameter above ever changes,
+		// we'll need to work out a reasonable way to figure out how to properly handle errors.
 		for _, d := range streamData.Messages {
 			p, ok := d.Values["data"]
 			if !ok {
 				// this would happen if the "data" field is not on the stream message.
-				// Per `Add`, this should not happen in a perfect world.  unsure how to approach if it does happen tho.
-				continue
+				// Per `Publish`, this should not happen in a perfect world.  unsure how to approach if it does happen tho.
+				return fmt.Errorf("Invalid `data` parameter found on event %s", d.ID)
 			}
 
 			// handler
-			handler(p)
+			if err := handler([]byte(p.(string))); err != nil {
+				return err
+			}
 
 			// mark as done
 			ps.rc.XAck(ps.topic, ps.workerGroup, d.ID)
 		}
 	}
+	return nil
 }
 
-// NewRedisPubSub creates a new queue handler
+// String descriptive string about the RedisPubSub
+func (ps RedisPubSub) String() string {
+	return fmt.Sprintf("stream-name: '%s', stream-group: '%s', consumer-name: '%s'", ps.topic, ps.workerGroup, ps.consumerName)
+}
+
+// NewRedisPubSub creates a new queue handler that pushes into and pulls from a redis stream
 func NewRedisPubSub(topic, workerGroup string, rc *goredis.Client) (PublisherSubscriber, error) {
 	q := &RedisPubSub{
-		workerGroup: workerGroup,
-		topic:       topic,
-		rc:          rc,
+		workerGroup:  workerGroup,
+		topic:        topic,
+		consumerName: uuid.New().String(),
+		rc:           rc,
 	}
 
 	// we need to go ahead and create the stream and group if they don't already exist

@@ -16,13 +16,13 @@ func main() {
 	}
 	defer rc.Close()
 
-	q, err := shared.NewQueue("test-stream", "my-test-group", rc)
+	q, err := shared.NewRedisPubSub("test-stream", "my-test-group", rc)
 	if err != nil {
 		panic(err)
 	}
 
 	for {
-		if err := q.Drain(0, shared.Worker); err != nil {
+		if err := q.Subscribe(shared.Worker); err != nil {
 			panic(err)
 		}
 	}

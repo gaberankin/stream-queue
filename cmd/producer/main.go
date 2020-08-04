@@ -19,20 +19,20 @@ func main() {
 	}
 	defer rc.Close()
 
-	q, err := shared.NewQueue("test-stream", "my-test-group", rc)
+	q, err := shared.NewRedisPubSub("test-stream", "my-test-group", rc)
 	if err != nil {
 		panic(err)
 	}
 
 	l := 0
 	for {
-		j := &shared.TestJobData{Data: fmt.Sprintf("%d / %s", l, time.Now().Format("2006-01-02 13:14:15"))}
+		j := &shared.TestJobData{Data: fmt.Sprintf("%d / %s", l, time.Now().Format("2006-01-02 15:04:05"))}
 		payload, err := json.Marshal(j)
 		if err != nil {
 			panic(err)
 		}
 
-		if err := q.Add(payload); err != nil {
+		if err := q.Publish(payload); err != nil {
 			panic(err)
 		}
 		fmt.Println("pushed: ", l)

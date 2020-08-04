@@ -2,8 +2,6 @@ package shared
 
 import (
 	"encoding/json"
-
-	goredis "github.com/go-redis/redis"
 )
 
 type Publisher interface {
@@ -13,7 +11,7 @@ type Publisher interface {
 
 type Subscriber interface {
 	// things for subscribing
-	Subscribe(handler func([]byte)) error
+	Subscribe(handler func([]byte) error) error
 }
 
 // Just a compositional interface
@@ -23,15 +21,15 @@ type PublisherSubscriber interface {
 }
 
 // this needs to go in the subscription handler
-var e envelope
-if err := json.Unmarshal(stuff), &e); err != nil {
-	//again, how to approach errors here?
-	continue
-}
-if err := job(e.Data); err != nil {
-	// ??
-	continue
-}
+// var e envelope
+// if err := json.Unmarshal(stuff), &e); err != nil {
+// 	//again, how to approach errors here?
+// 	continue
+// }
+// if err := job(e.Data); err != nil {
+// 	// ??
+// 	continue
+// }
 
 // // Queue queue client
 // type Queue struct {
